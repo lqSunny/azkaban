@@ -1,0 +1,85 @@
+/*
+ * Copyright 2017 LinkedIn Corp.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
+package com.datapps.zebra.workflow.db;
+
+import org.apache.commons.dbcp2.BasicDataSource;
+import org.apache.log4j.Logger;
+
+import java.sql.Connection;
+import java.sql.SQLException;
+
+
+public class MySQLDataSource extends AzkabanDataSource {
+
+  private static final Logger logger = Logger.getLogger(MySQLDataSource.class);
+
+  public MySQLDataSource(final String host, final int port, final String dbName,
+      final String user, final String password, final int numConnections) {
+    super();
+
+    final String url = "jdbc:mysql://" + (host + ":" + port + "/" + dbName);
+    addConnectionProperty("useUnicode", "yes");
+    addConnectionProperty("characterEncoding", "UTF-8");
+    setDriverClassName("com.mysql.jdbc.Driver");
+    setUsername(user);
+    setPassword(password);
+    setUrl(url);
+    setMaxTotal(numConnections);
+    setValidationQuery("/* ping */ select 1");
+    setTestOnBorrow(true);
+  }
+
+  /**
+   * This method overrides {@link BasicDataSource#getConnection()}, in order to have retry logics.
+   */
+  @Override
+  public synchronized Connection getConnection() throws SQLException {
+
+    Connection connection = null;
+    int retryAttempt = 0;
+    while (retryAttempt < AzDBUtil.MAX_DB_RETRY_COUNT) {
+      try {
+        /**
+         * when DB connection could not be fetched (e.g., network issue), or connection can not be validated,
+         * {@link BasicDataSource} throws a SQL Exception. {@link BasicDataSource#dataSource} will be reset to null.
+         * createDataSource() will create a new dataSource.
+         * Every Attempt generates a thread-hanging-time, about 75 seconds, which is hard coded, and can not be changed.
+         */
+        connection = createDataSource().getConnection();
+        if (connection != null) {
+          return connection;
+        }
+      } catch (final SQLException ex) {
+        logger.error(
+            "Failed to find DB connection. waits 1 minutes and retry. No.Attempt = " + retryAttempt,
+            ex);
+      } finally {
+        retryAttempt++;
+      }
+    }
+    return null;
+  }
+
+  @Override
+  public String getDBType() {
+    return "mysql";
+  }
+
+  @Override
+  public boolean allowsOnDuplicateKey() {
+    return true;
+  }
+}

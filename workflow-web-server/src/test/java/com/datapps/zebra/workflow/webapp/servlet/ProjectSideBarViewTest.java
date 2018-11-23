@@ -1,0 +1,43 @@
+package com.datapps.zebra.workflow.webapp.servlet;
+
+import com.datapps.zebra.workflow.fixture.FileAssertion;
+import com.datapps.zebra.workflow.fixture.MockProject;
+import com.datapps.zebra.workflow.fixture.VelocityContextTestUtil;
+import com.datapps.zebra.workflow.fixture.VelocityTemplateTestUtil;
+import com.datapps.zebra.workflow.fixture.WebFileAssertion;
+import com.datapps.zebra.workflow.project.Project;
+import org.apache.velocity.VelocityContext;
+import org.junit.Test;
+
+
+/**
+ * Test project side bar view
+ */
+public class ProjectSideBarViewTest {
+
+  /**
+   * Test project side bar view.
+   *
+   * The project description should be HTML encoded to avoid cross site scripting issues.
+   *
+   * @throws Exception the exception
+   */
+  @Test
+  public void testProjectSideBarView()
+      throws Exception {
+    final VelocityContext context = VelocityContextTestUtil.getInstance();
+
+    final Project project = MockProject.getMockProject();
+
+    // Intentionally tries to inject a Javascript.
+    project.setDescription("<script>window.alert(\"hacked\")</script>");
+
+    context.put("project", project);
+    context.put("admins", "admin_name");
+    context.put("userpermission", "admin_permission");
+
+    final String result = VelocityTemplateTestUtil.renderTemplate("projectsidebar", context);
+    final String actual = FileAssertion.surroundWithHtmlTag(result);
+    WebFileAssertion.assertStringEqualFileContent("project-side-bar.html", actual);
+  }
+}
